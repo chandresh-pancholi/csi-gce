@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
         && mkdir -p /etc/autofs && touch /etc/autofs/auto.gcsfuse && rm -rf /var/lib/apt/lists
 
 
-COPY --from=builder /go/src/github.com/chandresh-pancholi/csi-gce/application_default_credentials.json .config/gcloud/application_default_credentials.json
+#COPY --from=builder /go/src/github.com/chandresh-pancholi/csi-gce/application_default_credentials.json .config/gcloud/application_default_credentials.json
 
 COPY --from=builder /go/src/github.com/chandresh-pancholi/csi-gce/bin/csi-gce /csi-gce
 
