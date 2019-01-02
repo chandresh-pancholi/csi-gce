@@ -24,7 +24,7 @@ type Driver struct {
 	nodeCaps       []csi.NodeServiceCapability_RPC_Type
 }
 
-func NewDriver(mounter *mount.SafeFormatAndMount, endPoint string) *Driver  {
+func NewDriver(mounter *mount.SafeFormatAndMount, endPoint, nodeId string) *Driver  {
 	if mounter == nil {
 		 mounter = newSafeMounter()
 	}
@@ -34,6 +34,7 @@ func NewDriver(mounter *mount.SafeFormatAndMount, endPoint string) *Driver  {
 		endpoint: endPoint,
 		//cloud:    cloud,
 		//mounter:  mounter,
+		nodeID: nodeId,
 		volumeCaps: []csi.VolumeCapability_AccessMode{
 			{
 				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,

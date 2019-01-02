@@ -79,7 +79,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/kubelet/plugins/com.oc.cmd.datamonfuse
         - name: csi-gcs
-          image: reg.onec.co/csi-gce:0.1.0-alpha
+          image: chandreshpancholi/csi-gce:0.1.0-alpha
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--v=4"
