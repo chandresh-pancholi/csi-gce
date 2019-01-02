@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/chandresh-pancholi/csi-gce/pkg/driver"
-	"github.com/golang/glog"
 	"log"
 	"os"
 )
@@ -33,14 +32,14 @@ func main()  {
 
 	drv := driver.NewDriver(nil, *nodeID, *endpoint)
 	if err := drv.Run(); err != nil {
-		glog.Fatalln(err)
-	}
-
-	driver, err := driver.NewGCE(nil, *nodeID, *endpoint)
-	if err != nil {
 		log.Fatal(err)
 	}
-	driver.Run()
+
+	//driver, err := driver.NewGCE(nil, *nodeID, *endpoint)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//driver.Run()
 	os.Exit(0)
 
 }
