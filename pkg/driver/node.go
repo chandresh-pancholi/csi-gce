@@ -2,10 +2,10 @@ package driver
 
 import (
 	"context"
-	"fmt"
-	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/kubernetes/pkg/util/mount"
 	"log"
 	"os"
 	"os/exec"
@@ -14,73 +14,53 @@ import (
 const (
 	// default file system type to be used when it is not provided
 	defaultFsType = "ext4"
+	maxVolumesPerNode = 7
+	diskIDPath   = "/dev/disk/by-id"
+	diskDOPrefix = "scsi-0DO_Volume_"
+
 )
 
 func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
+	log.Printf("NodeStageVolume: called with args %+v", *req)
+
 	volumeID := req.GetVolumeId()
+
+	stagingTargetPath := req.GetStagingTargetPath()
+
+	// Check arguments
 	if len(volumeID) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
-	}
-	// Check that target_path is created by CO and is a directory
-	target := req.GetStagingTargetPath()
-	if len(target) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Staging target not provided")
+		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
 	}
 
-	source, ok := req.PublishContext["devicePath"]
-	if !ok {
-		return nil, status.Error(codes.InvalidArgument, "Device path not provided")
+	if len(stagingTargetPath) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
 
-	volCap := req.GetVolumeCapability()
-	if volCap == nil {
-		return nil, status.Error(codes.InvalidArgument, "Volume capability not provided")
+	if req.VolumeCapability == nil {
+		return nil, status.Error(codes.InvalidArgument, "NodeStageVolume Volume Capability must be provided")
 	}
 
-
-
-	// TODO: consider replacing IsLikelyNotMountPoint by IsNotMountPoint
-	notMnt, err := d.mounter.Interface.IsLikelyNotMountPoint(target)
+	log.Printf("NodeStageVolume: checking mount on stage target path %s ", stagingTargetPath)
+	notMnt, err := checkMount(stagingTargetPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			if errMkDir := d.mounter.Interface.MakeDir(target); errMkDir != nil {
-				msg := fmt.Sprintf("could not create target dir %q: %v", target, errMkDir)
-				return nil, status.Error(codes.Internal, msg)
-			}
-			notMnt = true
-		} else {
-			msg := fmt.Sprintf("could not determine if %q is valid mount point: %v", target, err)
-			return nil, status.Error(codes.Internal, msg)
-		}
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-
 	if !notMnt {
-		msg := fmt.Sprintf("target %q is not a valid mount point", target)
-		return nil, status.Error(codes.InvalidArgument, msg)
-	}
-	// Get fs type that the volume will be formatted with
-	attributes := req.GetVolumeContext()
-	fsType, exists := attributes["fsType"]
-	if !exists || fsType == "" {
-		fsType = defaultFsType
+		return &csi.NodeStageVolumeResponse{}, nil
 	}
 
-	// FormatAndMount will format only if needed
-	log.Printf("NodeStageVolume: formatting %s and mounting at %s", source, target)
-	_, err = exec.Command("gcsfuse", volumeID, target).Output()
+	log.Printf("NodeStageVolume: executing GCSFuse command")
+	//out, err := exec.Command("gcsfuse", volumeID, stagingTargetPath).Output()
+	out, err := exec.Command("gcsfuse", "onec-gcsfuse", stagingTargetPath).Output()
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("NodeStageVolume: gcsfuse error %v ", err)
+		log.Printf("NodeStageVolume: Outout gcsfuse %s ", string(out))
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	err = d.mounter.FormatAndMount(source, target, fsType, nil)
-	if err != nil {
-		msg := fmt.Sprintf("could not format %q and mount it at %q", source, target)
-		return nil, status.Error(codes.Internal, msg)
-	}
+	log.Printf("NodeStageVolume: gcsfuse command run output %s ", out)
 
 	return &csi.NodeStageVolumeResponse{}, nil
-
-	return nil, nil
 
 }
 
@@ -108,44 +88,42 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolu
 func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	log.Printf("NodePublishVolume: called with args %+v", *req)
 	volumeID := req.GetVolumeId()
+	targetPath := req.GetTargetPath()
+	stagingTargetPath := req.GetStagingTargetPath()
+
+	// Check arguments
+	if req.GetVolumeCapability() == nil {
+		return nil, status.Error(codes.InvalidArgument, "Volume capability missing in request")
+	}
 	if len(volumeID) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
+		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
 	}
-
-	source := req.GetStagingTargetPath()
-	if len(source) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Staging target not provided")
+	if len(stagingTargetPath) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Staging Target path missing in request")
 	}
-
-	target := req.GetTargetPath()
-	if len(target) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Target path not provided")
+	if len(targetPath) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
-
-	volCap := req.GetVolumeCapability()
-	if volCap == nil {
-		return nil, status.Error(codes.InvalidArgument, "Volume capability not provided")
-	}
-
-	//if !d.isValidVolumeCapabilities([]*cmd.VolumeCapability{volCap}) {
-	//	return nil, status.Error(codes.InvalidArgument, "Volume capability not supported")
-	//}
 
 	options := []string{"bind"}
 	if req.GetReadonly() {
 		options = append(options, "ro")
 	}
 
-	log.Printf("NodePublishVolume: creating dir %s", target)
-	if err := d.mounter.Interface.MakeDir(target); err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not create dir %q: %v", target, err)
+	log.Printf("NodePublishVolume: creating dir %s", targetPath)
+	if err := d.mounter.Interface.MakeDir(targetPath); err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not create dir %q: %v", targetPath, err)
 	}
 
-	log.Printf("NodePublishVolume: mounting %s at %s", source, target)
-	if err := d.mounter.Interface.Mount(source, target, "ext4", options); err != nil {
-		os.Remove(target)
-		return nil, status.Errorf(codes.Internal, "Could not mount %q at %q: %v", source, target, err)
+	log.Printf("NodePublishVolume: mounting %s at %s", stagingTargetPath, targetPath)
+	if err := d.mounter.Interface.Mount(stagingTargetPath, targetPath, "ext4", options); err != nil {
+		os.Remove(targetPath)
+		return nil, status.Errorf(codes.Internal, "Could not mount %q at %q: %v", stagingTargetPath, targetPath, err)
 	}
+
+	log.Printf("NodePublishVolume: bucket %s successfuly mounted to %s",volumeID, targetPath)
+
+	//log.Printf("NodePublishVolume: gcsfuse command run output %s ", out)
 
 	return &csi.NodePublishVolumeResponse{}, nil
 }
@@ -171,10 +149,11 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublish
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "NodeGetVolumeStats is not implemented yet")
+//func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
+//	return nil, status.Error(codes.Unimplemented, "NodeGetVolumeStats is not implemented yet")
+//
+//}
 
-}
 func (d *Driver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
 	log.Printf("NodeGetCapabilities: called with args %+v", *req)
 	var caps []*csi.NodeServiceCapability
@@ -192,6 +171,7 @@ func (d *Driver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabi
 }
 
 func (d *Driver) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
+	log.Printf("NodeGetInfo: called with args %+v", *req)
 	//log.Infof("NodeGetInfo: called with args %+v", *req)
 	//m := d.cloud.GetMetadata()
 	//
@@ -204,7 +184,25 @@ func (d *Driver) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (
 	//	AccessibleTopology: topology,
 	//}, nil
 
+	return &csi.NodeGetInfoResponse{
+		NodeId:            d.nodeID,
+		MaxVolumesPerNode: maxVolumesPerNode,
+
+		// make sure that the driver works on this particular region only
+		AccessibleTopology: &csi.Topology{
+			Segments: map[string]string{
+				"region": "us-west-2",
+			},
+		},
+	}, nil
 	return  &csi.NodeGetInfoResponse{}, nil
+}
+
+func (d *Driver) NodeGetId(ctx context.Context, req *csi.NodeGetIdRequest) (*csi.NodeGetIdResponse, error) {
+	log.Printf("NodeGetId: called with args %+v", *req)
+	return &csi.NodeGetIdResponse{
+		NodeId: d.nodeID,
+	}, nil
 }
 
 func verifyTargetDir(target string) error {
@@ -232,4 +230,19 @@ func verifyTargetDir(target string) error {
 	}
 
 	return nil
+}
+
+func checkMount(targetPath string) (bool, error) {
+	notMnt, err := mount.New("").IsLikelyNotMountPoint(targetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if err = os.MkdirAll(targetPath, 0750); err != nil {
+				return false, err
+			}
+			notMnt = true
+		} else {
+			return false, err
+		}
+	}
+	return notMnt, nil
 }

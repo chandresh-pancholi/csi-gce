@@ -2,8 +2,9 @@ module github.com/chandresh-pancholi/csi-gce
 
 require (
 	github.com/akutz/gofsutil v0.1.2 // indirect
-	github.com/container-storage-interface/spec v1.0.0
+	github.com/container-storage-interface/spec v0.3.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
+	github.com/golang/protobuf v1.2.0
 	github.com/kubernetes-csi/drivers v1.0.1 // indirect
 	github.com/sirupsen/logrus v1.2.0 // indirect
 	golang.org/x/net v0.0.0-20181207154023-610586996380 // indirect

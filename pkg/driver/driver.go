@@ -3,11 +3,16 @@ package driver
 import (
 	"context"
 	"github.com/chandresh-pancholi/csi-gce/pkg/util"
-	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 	"k8s.io/kubernetes/pkg/util/mount"
 	"net"
+)
+const (
+	// DriverName defines the name that is used in Kubernetes and the CSI
+	// system for the canonical, official name of this plugin
+	DriverName =  "com.oc.cmd.datamonfuse"
 )
 
 type Driver struct {
@@ -32,8 +37,8 @@ func NewDriver(mounter *mount.SafeFormatAndMount, endPoint, nodeId string) *Driv
 
 	return &Driver{
 		endpoint: endPoint,
-		//cloud:    cloud,
-		//mounter:  mounter,
+
+		mounter:  mounter,
 		nodeID: nodeId,
 		volumeCaps: []csi.VolumeCapability_AccessMode{
 			{

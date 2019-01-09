@@ -97,7 +97,7 @@ spec:
         securityContext:
           privileged: true
         imagePullPolicy: Always
-        image: chandreshpancholi/csi-gce:0.1.0-alpha
+        image: chandreshpancholi/csi-gce:0.4.0-alpha
         args:
         - --endpoint=$(CSI_ENDPOINT)
         - --nodeid=$(NODE_ID)

@@ -2,20 +2,22 @@ package driver
 
 import (
 	"context"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/golang/glog"
+	"github.com/container-storage-interface/spec/lib/go/csi/v0"
+	"github.com/golang/protobuf/ptypes/wrappers"
+	"log"
 )
 
 func (d *Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
+	log.Printf("GetPluginInfo: called with args %+v", *req)
 	return &csi.GetPluginInfoResponse{
-		Name:          "com.oc.cmd.datamonfuse",
+		Name:         DriverName,
 		VendorVersion: "0.1.0",
 	}, nil
 }
 
 
 func (d *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
-	glog.V(4).Infof("GetPluginCapabilities: called with args %+v", *req)
+	log.Printf("GetPluginCapabilities: called with args %+v", *req)
 	resp := &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
 			{
@@ -28,7 +30,8 @@ func (d *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCa
 			{
 				Type: &csi.PluginCapability_Service_{
 					Service: &csi.PluginCapability_Service{
-						Type: csi.PluginCapability_Service_VOLUME_ACCESSIBILITY_CONSTRAINTS,
+						//Type: csi.PluginCapability_Service_VOLUME_ACCESSIBILITY_CONSTRAINTS,
+						Type: csi.PluginCapability_Service_ACCESSIBILITY_CONSTRAINTS,
 					},
 				},
 			},
@@ -39,6 +42,10 @@ func (d *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCa
 }
 
 func (d *Driver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
-	glog.V(4).Infof("Probe: called with args %+v", *req)
-	return &csi.ProbeResponse{}, nil
+	log.Printf("Probe: called with args %+v", *req)
+	return &csi.ProbeResponse{
+		Ready: &wrappers.BoolValue{
+			Value: true,
+		},
+	}, nil
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/chandresh-pancholi/csi-gce/pkg/driver"
 	"log"
-	"os"
 )
 
 func main()  {
@@ -29,8 +28,10 @@ func main()  {
 
 
 
+	log.Printf("Endpoint: %s ", *endpoint)
+	log.Printf("NodeId: %s ", *nodeID)
 
-	drv := driver.NewDriver(nil, *nodeID, *endpoint)
+	drv := driver.NewDriver(nil, *endpoint, *nodeID)
 	if err := drv.Run(); err != nil {
 		log.Fatal(err)
 	}
@@ -40,6 +41,6 @@ func main()  {
 	//	log.Fatal(err)
 	//}
 	//driver.Run()
-	os.Exit(0)
+	//os.Exit(0)
 
 }
